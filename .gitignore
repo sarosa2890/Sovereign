@@ -1,0 +1,24 @@
+# Build directories
+build/
+bin/
+obj/
+out/
+
+# Visual Studio files
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# Compiled binaries
+*.dll
+*.exe
+*.pdb
+*.exp
+*.lib
+
+# Temporary files
+*.log
+*.tmp
+.gemini/
