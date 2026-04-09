@@ -239,7 +239,7 @@ HRESULT STDMETHODCALLTYPE hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterva
             if (config::aimbot) {
                 ImGui::Checkbox("Visibility Check", &config::aim_visible_check);
                 ImGui::Checkbox("Draw FOV Circle", &config::draw_fov);
-                ImGui::SliderFloat("FOV Radius", &config::aim_fov, 1.0f, 180.0f, "%.1f deg");
+                ImGui::SliderFloat("FOV Radius", &config::aim_fov, 1.0f, 179.0f, "%.1f deg");
                 ImGui::SliderFloat("Smooth Speed", &config::aim_smooth, 1.0f, 20.0f, "%.1f");
             }
             ImGui::Dummy(ImVec2(0, 10));

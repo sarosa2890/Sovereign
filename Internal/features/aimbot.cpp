@@ -87,7 +87,10 @@ namespace features {
         }
 
         if (foundTarget) {
-            Vector3 finalAngles = currentAngles + (bestDelta * (1.0f / config::aim_smooth));
+            float smooth = config::aim_smooth;
+            if (smooth < 1.0f) smooth = 1.0f; // Prevent division by zero
+            
+            Vector3 finalAngles = currentAngles + (bestDelta * (1.0f / smooth));
             math::NormalizeAngles(finalAngles);
 
             // Write to dwViewAngles
