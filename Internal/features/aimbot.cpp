@@ -2,12 +2,14 @@
 #include "../sdk/offsets.h"
 #include "../sdk/math.h"
 #include "../sdk/config.h"
+#include "../imgui/imgui.h"
 #include <Windows.h>
-#include <algorithm>
+#include <cmath>
 
 namespace features {
     void RunAimbot() {
-        // No more key check, active as long as config::aimbot is true
+        if (!config::aimbot) return;
+
         uintptr_t clientBase = (uintptr_t)GetModuleHandleA("client.dll");
         if (!clientBase) return;
 
@@ -16,20 +18,30 @@ namespace features {
 
         uint8_t localTeam = *(uint8_t*)(localPlayerPawn + sdk::schemas::client_dll::C_BaseEntity::m_iTeamNum);
         
-        uintptr_t gameSceneNodeLocal = *(uintptr_t*)(localPlayerPawn + sdk::schemas::client_dll::C_BaseEntity::m_pGameSceneNode);
-        if (!gameSceneNodeLocal) return;
-
-        Vector3 localOrigin = *(Vector3*)(gameSceneNodeLocal + sdk::schemas::client_dll::CGameSceneNode::m_vecAbsOrigin);
-        Vector3 viewOffset = *(Vector3*)(localPlayerPawn + sdk::schemas::client_dll::C_BaseModelEntity::m_vecViewOffset);
-        Vector3 eyePos = localOrigin + viewOffset;
-
-        Vector3 currentAngles = *(Vector3*)(clientBase + sdk::offsets::client_dll::dwViewAngles);
-
         uintptr_t entityList = *(uintptr_t*)(clientBase + sdk::offsets::client_dll::dwEntityList);
         if (!entityList) return;
 
-        float closestFov = 10000.0f;
-        Vector3 bestDelta = { 0, 0, 0 };
+        view_matrix_t viewMatrix = *(view_matrix_t*)(clientBase + sdk::offsets::client_dll::dwViewMatrix);
+        
+        ImGuiIO& io = ImGui::GetIO();
+        int width = (int)io.DisplaySize.x;
+        int height = (int)io.DisplaySize.y;
+
+        if (width <= 0 || height <= 0) return; // Prevent division by zero if game window is minimized
+        
+        float centerX = width / 2.0f;
+        float centerY = height / 2.0f;
+        
+        // Calculate FOV in pixels safely
+        float fovRadius = 0.0f;
+        float tanHalfFov = tanf(config::aim_fov * (3.1415926535f / 180.0f) / 2.0f);
+        float tanHalf90 = tanf(90.0f * (3.1415926535f / 180.0f) / 2.0f);
+        if (tanHalf90 != 0.0f) {
+             fovRadius = (tanHalfFov / tanHalf90) * centerX;
+        }
+
+        float closestDist = 10000.0f;
+        Vector3 bestScreenPos = { 0, 0, 0 };
         bool foundTarget = false;
 
         for (int i = 1; i <= 64; i++) {
@@ -59,7 +71,6 @@ namespace features {
                 bool isSpotted = *(bool*)(entitySpottedState + sdk::schemas::client_dll::EntitySpottedState_t::m_bSpotted);
                 uint32_t spottedByMask = *(uint32_t*)(entitySpottedState + sdk::schemas::client_dll::EntitySpottedState_t::m_bSpottedByMask);
                 
-                // If it's not spotted at all, skip it (simple visibility fallback without tracing)
                 if (!isSpotted && spottedByMask == 0) continue;
             }
 
@@ -72,17 +83,19 @@ namespace features {
             // Bone 6 is usually the head in CS2
             Vector3 targetHead = *(Vector3*)(boneArray + 6 * 32);
 
-            Vector3 angles = math::CalcAngle(eyePos, targetHead);
-            math::NormalizeAngles(angles);
+            Vector3 screenPos;
+            if (math::WorldToScreen(targetHead, screenPos, viewMatrix, width, height)) {
+                
+                // Prevent NaN or Infinity from breaking distance calculation
+                if (std::isnan(screenPos.x) || std::isnan(screenPos.y) || std::isinf(screenPos.x) || std::isinf(screenPos.y)) continue;
 
-            Vector3 delta = angles - currentAngles;
-            math::NormalizeAngles(delta);
-
-            float fov = sqrtf(delta.x * delta.x + delta.y * delta.y);
-            if (fov < closestFov && fov < config::aim_fov) {
-                closestFov = fov;
-                bestDelta = delta;
-                foundTarget = true;
+                float dist = sqrtf(powf(screenPos.x - centerX, 2) + powf(screenPos.y - centerY, 2));
+                
+                if (dist < closestDist && dist <= fovRadius) {
+                    closestDist = dist;
+                    bestScreenPos = screenPos;
+                    foundTarget = true;
+                }
             }
         }
 
@@ -90,11 +103,23 @@ namespace features {
             float smooth = config::aim_smooth;
             if (smooth < 1.0f) smooth = 1.0f; // Prevent division by zero
             
-            Vector3 finalAngles = currentAngles + (bestDelta * (1.0f / smooth));
-            math::NormalizeAngles(finalAngles);
+            float deltaX = bestScreenPos.x - centerX;
+            float deltaY = bestScreenPos.y - centerY;
 
-            // Write to dwViewAngles
-            *(Vector3*)(clientBase + sdk::offsets::client_dll::dwViewAngles) = finalAngles;
+            // Apply smoothing
+            deltaX /= smooth;
+            deltaY /= smooth;
+
+            // Strict safety caps to prevent game/mouse driver from crashing
+            if (deltaX > 50.0f) deltaX = 50.0f;
+            if (deltaX < -50.0f) deltaX = -50.0f;
+            if (deltaY > 50.0f) deltaY = 50.0f;
+            if (deltaY < -50.0f) deltaY = -50.0f;
+
+            if (std::isnan(deltaX) || std::isnan(deltaY) || std::isinf(deltaX) || std::isinf(deltaY)) return;
+
+            // Move the mouse
+            mouse_event(MOUSEEVENTF_MOVE, (DWORD)(int)deltaX, (DWORD)(int)deltaY, 0, 0);
         }
     }
 }
