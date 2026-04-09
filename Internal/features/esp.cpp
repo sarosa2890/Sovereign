@@ -8,13 +8,6 @@
 
 namespace features {
 
-    bool IsValidPtr(uintptr_t ptr) {
-        if (!ptr) return false;
-        if (ptr < 0x10000 || ptr > 0x000F000000000000) return false;
-        if (IsBadReadPtr((void*)ptr, sizeof(uintptr_t))) return false;
-        return true;
-    }
-
     void DrawBoneLine(ImDrawList* drawList, uintptr_t boneArray, int bone1, int bone2, view_matrix_t viewMatrix, int width, int height) {
         Vector3 pos1 = *(Vector3*)(boneArray + bone1 * 32);
         Vector3 pos2 = *(Vector3*)(boneArray + bone2 * 32);
