@@ -14,12 +14,24 @@ namespace features {
         if (!clientBase) return;
 
         uintptr_t localPlayerPawn = *(uintptr_t*)(clientBase + sdk::offsets::client_dll::dwLocalPlayerPawn);
-        if (!localPlayerPawn) return;
+        if (!IsValidPtr(localPlayerPawn)) return;
+
+        int localHealth = *(int*)(localPlayerPawn + sdk::schemas::client_dll::C_BaseEntity::m_iHealth);
+        if (localHealth <= 0) return; // Prevent aimbot if we are dead (or match ended)
 
         uint8_t localTeam = *(uint8_t*)(localPlayerPawn + sdk::schemas::client_dll::C_BaseEntity::m_iTeamNum);
         
         uintptr_t entityList = *(uintptr_t*)(clientBase + sdk::offsets::client_dll::dwEntityList);
-        if (!entityList) return;
+        if (!IsValidPtr(entityList)) return;
+
+        uintptr_t gameSceneNodeLocal = *(uintptr_t*)(localPlayerPawn + sdk::schemas::client_dll::C_BaseEntity::m_pGameSceneNode);
+        if (!IsValidPtr(gameSceneNodeLocal)) return;
+
+        Vector3 localOrigin = *(Vector3*)(gameSceneNodeLocal + sdk::schemas::client_dll::CGameSceneNode::m_vecAbsOrigin);
+        Vector3 viewOffset = *(Vector3*)(localPlayerPawn + sdk::schemas::client_dll::C_BaseModelEntity::m_vecViewOffset);
+        Vector3 eyePos = localOrigin + viewOffset;
+
+        Vector3 currentAngles = *(Vector3*)(clientBase + sdk::offsets::client_dll::dwViewAngles);
 
         view_matrix_t viewMatrix = *(view_matrix_t*)(clientBase + sdk::offsets::client_dll::dwViewMatrix);
         
@@ -46,19 +58,19 @@ namespace features {
 
         for (int i = 1; i <= 64; i++) {
             uintptr_t listEntry = *(uintptr_t*)(entityList + 0x10 + 8 * (i >> 9));
-            if (!listEntry) continue;
+            if (!IsValidPtr(listEntry)) continue;
 
             uintptr_t controller = *(uintptr_t*)(listEntry + 0x70 * (i & 0x1FF));
-            if (!controller) continue;
+            if (!IsValidPtr(controller)) continue;
 
             uint32_t pawnHandle = *(uint32_t*)(controller + sdk::schemas::client_dll::CCSPlayerController::m_hPlayerPawn);
             if (!pawnHandle) continue;
 
             uintptr_t pawnEntry = *(uintptr_t*)(entityList + 0x10 + 8 * ((pawnHandle & 0x7FFF) >> 9));
-            if (!pawnEntry) continue;
+            if (!IsValidPtr(pawnEntry)) continue;
 
             uintptr_t pawn = *(uintptr_t*)(pawnEntry + 0x70 * (pawnHandle & 0x1FF));
-            if (!pawn || pawn == localPlayerPawn) continue;
+            if (!IsValidPtr(pawn) || pawn == localPlayerPawn) continue;
 
             int health = *(int*)(pawn + sdk::schemas::client_dll::C_BaseEntity::m_iHealth);
             if (health <= 0 || health > 100) continue;
@@ -75,10 +87,10 @@ namespace features {
             }
 
             uintptr_t gameSceneNode = *(uintptr_t*)(pawn + sdk::schemas::client_dll::C_BaseEntity::m_pGameSceneNode);
-            if (!gameSceneNode) continue;
+            if (!IsValidPtr(gameSceneNode)) continue;
 
             uintptr_t boneArray = *(uintptr_t*)(gameSceneNode + 0x1E0); // m_modelState + 0x80
-            if (!boneArray) continue;
+            if (!IsValidPtr(boneArray)) continue;
 
             // Bone 6 is usually the head in CS2
             Vector3 targetHead = *(Vector3*)(boneArray + 6 * 32);
