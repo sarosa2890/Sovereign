@@ -19,7 +19,7 @@ namespace features {
         uint8_t localTeam = *(uint8_t*)(localPlayerPawn + sdk::schemas::client_dll::C_BaseEntity::m_iTeamNum);
         int entIndex = *(int*)(localPlayerPawn + sdk::schemas::client_dll::C_CSPlayerPawn::m_iIDEntIndex);
 
-        if (entIndex > 0 && entIndex <= 64) {
+        if (entIndex > 0 && entIndex < 16384) {
             uintptr_t entityList = *(uintptr_t*)(clientBase + sdk::offsets::client_dll::dwEntityList);
             if (!IsValidPtr(entityList)) return;
 
